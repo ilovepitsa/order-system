@@ -1,0 +1,51 @@
+openapi: 3.0.3
+info: 
+  title: Сервис заказа товара
+  version: 1.0.0
+tags:
+- name: orders
+  description: order managment
+paths:
+  /orders:
+    post:
+      tags: 
+        - orders
+      summary: создание заказа
+      operationId: CreateOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderInfo'
+      x-use-tx: true
+      responses:
+        "201":
+          description: Order created
+        "400":
+          $ref: '../common/schemas/BadRequest.yaml'      
+
+components:
+  schemas:
+    Source:
+      type: string
+      enum:
+        - mobile
+        - web
+    Payment:
+      type: string
+      enum:
+        - cash
+        - card
+        - crypto
+    OrderInfo:
+      type: object
+      description: Параметры заказа
+      required:
+        - source
+        - payment
+      properties:
+        source:
+          $ref: '#/components/schemas/Source'
+        payment:
+          $ref: '#/components/schemas/Payment'

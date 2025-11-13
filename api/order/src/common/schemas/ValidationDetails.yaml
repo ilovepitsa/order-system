@@ -1,0 +1,8 @@
+description: Описание срабатывания одного из валидаторов
+required: [path, reason]
+properties:
+  path:
+    type: string
+    description: JSON-путь до проблемного поля в запросе.
+  reason:
+    $ref: './LocalizedErrorMessage.yaml'

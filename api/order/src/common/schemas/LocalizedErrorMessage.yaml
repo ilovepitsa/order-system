@@ -1,0 +1,9 @@
+type: object
+description: Сообщение об ошибке
+x-common: true
+required: [message]
+properties:
+  message:
+    type: string
+    description: Текст ошибки
+    x-visibility: public

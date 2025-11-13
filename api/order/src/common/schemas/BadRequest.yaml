@@ -1,0 +1,12 @@
+description: Невалидный запрос
+content:
+  application/json:
+    schema:
+      allOf:
+      - $ref: './Error.yaml'
+      - type: object
+        properties:
+          details:
+            type: array
+            items:
+              $ref: './ValidationDetails.yaml'

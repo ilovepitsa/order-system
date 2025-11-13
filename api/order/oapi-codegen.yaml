@@ -1,0 +1,10 @@
+package: api
+generate:
+  echo-server: true
+  strict-server: true
+  models: true
+output: api/order/api.gen.go
+# import-mapping:
+#   ./orders/order.yaml: github.com/ilovepitsa/orders/api/order
+#   ./source.yaml: github.com/ilovepitsa/orders/api/order
+#   ./paymentMethod.yaml: github.com/ilovepitsa/orders/api/order

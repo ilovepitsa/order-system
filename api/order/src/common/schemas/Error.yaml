@@ -1,0 +1,10 @@
+type: object
+description: Общая модель ошибки
+properties:
+  code:
+    type: string
+    description: Короткий код ошибки
+  description:
+    type: string
+    description: Развернутое пояснение ошибки
+
