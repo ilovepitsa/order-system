@@ -4,50 +4,52 @@ import (
 	"context"
 	"time"
 
+	"github.com/ilovepitsa/orders/pkg/kafka/common"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/kmsg"
 	"go.uber.org/zap"
 )
 
-type ConsumerConfig struct {
-	ChanBuff      int           `json:"chan_buff" yaml:"chan_buff"`
-	WriteTimeout  time.Duration `json:"write_timeout" yaml:"write_timeout"`
-	CommitTimeout time.Duration `json:"commit_timeout" yaml:"commit_timeout"`
-}
-
-type MessageHeader struct {
-	Topic     string
-	Offset    int64
-	Partition int32
-}
-
-type Message struct {
-	MessageHeader
-	Value []byte
+type KafkaConsumer interface {
+	CommitOffsets(
+		ctx context.Context,
+		uncommitted map[string]map[int32]kgo.EpochOffset,
+		onDone func(*kgo.Client, *kmsg.OffsetCommitRequest, *kmsg.OffsetCommitResponse, error),
+	)
+	PollFetches(ctx context.Context) kgo.Fetches
 }
 
 type Consumer struct {
-	client *kgo.Client
-	cfg    ConsumerConfig
+	client KafkaConsumer
+	cfg    common.ConsumerConfig
 	logger *zap.Logger
 }
 
-func NewConsumer(
-	cfg ConsumerConfig,
+func ProvideConsumer(
+	cfg common.ConsumerConfig,
 	logger *zap.Logger,
 	opts ...kgo.Opt,
 ) (*Consumer, error) {
-	client, err := kgo.NewClient()
+	client, err := common.BuildKafkaClient(opts...)
 	if err != nil {
 		return nil, err
 	}
-	return &Consumer{
-		client: client,
-		logger: logger,
-	}, nil
+	return NewConsumer(client, cfg, logger), nil
 }
 
-func (c *Consumer) commitCompleted(ctx context.Context, done chan MessageHeader) {
+func NewConsumer(
+	client KafkaConsumer,
+	cfg common.ConsumerConfig,
+	logger *zap.Logger,
+) *Consumer {
+	return &Consumer{
+		cfg:    cfg,
+		client: client,
+		logger: logger,
+	}
+}
+
+func (c *Consumer) commitCompleted(ctx context.Context, done chan common.MessageHeader) {
 	commitTicker := time.NewTicker(c.cfg.CommitTimeout)
 	batch := map[string]map[int32]kgo.EpochOffset{}
 	for {
@@ -72,8 +74,12 @@ func (c *Consumer) commitCompleted(ctx context.Context, done chan MessageHeader)
 	}
 }
 
-func (c *Consumer) run(ctx context.Context, out chan Message, done chan MessageHeader, errOut chan kgo.FetchError) {
+func (c *Consumer) run(ctx context.Context, out chan common.Message, done chan common.MessageHeader, errOut chan kgo.FetchError) {
 	go c.commitCompleted(ctx, done)
+	defer func() {
+		close(out)
+		close(errOut)
+	}()
 	for {
 		fetches := c.client.PollFetches(ctx)
 		for _, errs := range fetches.Errors() {
@@ -83,9 +89,8 @@ func (c *Consumer) run(ctx context.Context, out chan Message, done chan MessageH
 		fetches.EachPartition(func(ftp kgo.FetchTopicPartition) {
 			ticker := time.NewTicker(c.cfg.WriteTimeout)
 			for _, records := range ftp.Records {
-
-				message := Message{
-					MessageHeader: MessageHeader{
+				message := common.Message{
+					MessageHeader: common.MessageHeader{
 						Topic:     records.Topic,
 						Offset:    records.Offset,
 						Partition: records.Partition,
@@ -96,7 +101,6 @@ func (c *Consumer) run(ctx context.Context, out chan Message, done chan MessageH
 				case <-ctx.Done():
 					return
 				case out <- message:
-
 				case <-ticker.C:
 				}
 			}
@@ -104,23 +108,10 @@ func (c *Consumer) run(ctx context.Context, out chan Message, done chan MessageH
 	}
 }
 
-func (c *Consumer) Pool(ctx context.Context) (chan Message, chan MessageHeader, chan kgo.FetchError) {
-	out := make(chan Message, c.cfg.ChanBuff)
-	done := make(chan MessageHeader, c.cfg.ChanBuff)
+func (c *Consumer) Pool(ctx context.Context) (chan common.Message, chan common.MessageHeader, chan kgo.FetchError) {
+	out := make(chan common.Message, c.cfg.ChanBuff)
+	done := make(chan common.MessageHeader, c.cfg.ChanBuff)
 	errChan := make(chan kgo.FetchError, c.cfg.ChanBuff*5)
 	go c.run(ctx, out, done, errChan)
 	return out, done, errChan
-}
-
-func ProvideKafkaConsumer() {
-	client, err := kgo.NewClient()
-	if err != nil {
-		panic(err)
-	}
-
-	fetches := client.PollFetches(context.TODO())
-	iter := fetches.RecordIter()
-	if !iter.Done() {
-
-	}
 }
